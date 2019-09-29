@@ -3,18 +3,20 @@ const client = new Discord.Client();
 const {token} = require('./config.json');
 const Game = require('./classes/game.js');
 
-let game = new Game();
-
 // This array contains all users that the bot is waiting confirmation on, who is going to be their opponent
 let awaiting_opponent_queue = [];
 
+// This array contains all users who invited other users for a game of checkers
 let awaiting_opponent_to_accept_queue = [];
+
+let all_games = [];
 
 client.on('ready', () => {
   console.log(`Logged in as ${client.user.tag}!`);
 });
 
 client.on('message', msg => {
+  var test = all_games;
   if (msg.author.id != client.user.id && msg.content.startsWith('!cb ')) {
     let command = msg.content.replace('!cb ', '');
     if (command == 'start') {
@@ -42,20 +44,26 @@ client.on('message', msg => {
           msg.reply(
               'If you want to play checkers with yourself, enter "!cb I want to play with myself"');
         } else {
-          msg.channel.send(user_invited + ' ' + msg.author.username +
+          msg.channel.send(user_invited + ', ' + msg.author.username +
               ' has invited you to play checkers! Type !cb accept to play.');
           add_user_to_awaiting_opponent_to_accept_queue(msg, user_invited);
         }
       }
     } else if (command.includes('I want to play with myself')) {
       remove_user_from_awaiting_opponent_queue(msg.author);
-      initiate_new_game(msg.author, msg.author);
+      let game = initiate_new_game(msg.author, msg.author);
       msg.reply('Ok! A game starting, please wait...');
+      msg.reply(game.print_game());
     } else if (command == 'accept') {
       let invited_queue = check_invites(msg.author);
+      // If the user has only one person that invited them...
       if (invited_queue.length === 1) {
-        msg.reply(`Ok! You have started a game with ${invited_queue.invitee}`);
+        msg.reply(`Ok! You have started a game with ${invited_queue[0].invitee_message.author}, please wait...`);
+        let game = initiate_new_game(invited_queue[0].invitee_message.author, msg.author);
+        msg.channel.send(game.print_game());
       }
+    } else if (command == 'move') {
+      all_games.filter(x => (x.white_piece_user.id === msg.author.id) || (x.black_piece_user_piece_user.id === msg.author.id));
     }
   }
   if (msg.content === 'ping') {
@@ -65,12 +73,9 @@ client.on('message', msg => {
 
 client.login(token);
 
+// Check if the author of this message was invited for a game of checkers
 function check_invites(invited) {
-  return awaiting_opponent_to_accept_queue.filter(x => x.invitee.id === invited.id);
-}
-
-function initiate_new_game(person_a, person_b) {
-
+  return awaiting_opponent_to_accept_queue.filter(x => x.invited.id === invited.id);
 }
 
 // Awaiting opponent functions
@@ -96,7 +101,7 @@ function add_user_to_awaiting_opponent_queue(user_awaiting) {
 }
 
 function remove_user_from_awaiting_opponent_queue(user_awaiting) {
-  let index = awaiting_opponent_queue.indexOf(user_awaiting);
+  let index = awaiting_opponent_queue.findIndex(x => x.author.id === user_awaiting.id);
   awaiting_opponent_queue.splice(index, 1);
 }
 
@@ -109,4 +114,14 @@ function add_user_to_awaiting_opponent_to_accept_queue(invitee, invited) {
 function remove_user_to_awaiting_opponent_to_accept_queue(invitee, invited) {
   awaiting_opponent_to_accept_queue.push(
       {'invitee': invitee, 'invited': invited});
+}
+
+function initiate_new_game(person_a, person_b) {
+  let game = new Game(person_a, person_b);
+  add_game_to_all_games(game);
+  return game;
+}
+
+function add_game_to_all_games(game) {
+  all_games.push(game);
 }
