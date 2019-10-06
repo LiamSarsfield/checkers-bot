@@ -6,17 +6,19 @@ const Game = require('./classes/game.js');
 // This array contains all users that the bot is waiting confirmation on, who is going to be their opponent
 let awaiting_opponent_queue = [];
 
-// This array contains all users who invited other users for a game of checkers
+// This array contains all users who invited other users for a game of checkers, could be made into class
 let awaiting_opponent_to_accept_queue = [];
 
 let all_games = [];
 
+let player_base = [];
 client.on('ready', () => {
   console.log(`Logged in as ${client.user.tag}!`);
 });
 
 client.on('message', msg => {
   var test = all_games;
+  var playerbase = player_base;
   if (msg.author.id != client.user.id && msg.content.startsWith('!cb ')) {
     let command = msg.content.replace('!cb ', '');
     if (command == 'start') {
@@ -58,12 +60,16 @@ client.on('message', msg => {
       let invited_queue = check_invites(msg.author);
       // If the user has only one person that invited them...
       if (invited_queue.length === 1) {
-        msg.reply(`Ok! You have started a game with ${invited_queue[0].invitee_message.author}, please wait...`);
-        let game = initiate_new_game(invited_queue[0].invitee_message.author, msg.author);
+        msg.reply(
+            `Ok! You have started a game with ${invited_queue[0].invitee_message.author}, please wait...`);
+        let game = initiate_new_game(invited_queue[0].invitee_message.author,
+            msg.author);
         msg.channel.send(game.print_game());
       }
     } else if (command == 'move') {
-      all_games.filter(x => (x.white_piece_user.id === msg.author.id) || (x.black_piece_user_piece_user.id === msg.author.id));
+      // get the user's primary game and execute their command
+      all_games.filter(x => (x.white_piece_user.id === msg.author.id) ||
+          (x.black_piece_user_piece_user.id === msg.author.id));
     }
   }
   if (msg.content === 'ping') {
@@ -75,7 +81,8 @@ client.login(token);
 
 // Check if the author of this message was invited for a game of checkers
 function check_invites(invited) {
-  return awaiting_opponent_to_accept_queue.filter(x => x.invited.id === invited.id);
+  return awaiting_opponent_to_accept_queue.filter(
+      x => x.invited.id === invited.id);
 }
 
 // Awaiting opponent functions
@@ -101,7 +108,8 @@ function add_user_to_awaiting_opponent_queue(user_awaiting) {
 }
 
 function remove_user_from_awaiting_opponent_queue(user_awaiting) {
-  let index = awaiting_opponent_queue.findIndex(x => x.author.id === user_awaiting.id);
+  let index = awaiting_opponent_queue.findIndex(
+      x => x.author.id === user_awaiting.id);
   awaiting_opponent_queue.splice(index, 1);
 }
 
@@ -119,9 +127,23 @@ function remove_user_to_awaiting_opponent_to_accept_queue(invitee, invited) {
 function initiate_new_game(person_a, person_b) {
   let game = new Game(person_a, person_b);
   add_game_to_all_games(game);
+  update_player_base(person_a, game);
+  update_player_base(person_b, game);
   return game;
 }
 
 function add_game_to_all_games(game) {
   all_games.push(game);
+}
+
+function update_player_base(person, game) {
+  var player_index = player_base.indexOf(person);
+  if(player_index !== -1) {
+    player_base[player_index].games.push(game);
+    player_base[player_index].primary_game_index = player_base[player_index].games.indexOf(game);
+  } else {
+    person.games = [game];
+    person.primary_game_index = 0;
+    player_base.push(person);
+  }
 }

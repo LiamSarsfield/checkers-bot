@@ -157,5 +157,5 @@ class Game {
     return printer;
   }
 };
-
+Game._player_base = [];
 module.exports = Game;
