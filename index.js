@@ -17,8 +17,7 @@ client.on('ready', () => {
 });
 
 client.on('message', msg => {
-  var test = all_games;
-  var playerbase = player_base;
+  find_player_games(msg.author);
   if (msg.author.id != client.user.id && msg.content.startsWith('!cb ')) {
     let command = msg.content.replace('!cb ', '');
     if (command == 'start') {
@@ -70,6 +69,52 @@ client.on('message', msg => {
       // get the user's primary game and execute their command
       all_games.filter(x => (x.white_piece_user.id === msg.author.id) ||
           (x.black_piece_user_piece_user.id === msg.author.id));
+    } else if (command == 'my games') {
+      let player_games = find_player_games(msg.author);
+      if (player_games.length === 0) {
+        msg.reply('You have no games :(');
+      } else {
+        msg.reply('You have games with the following people:');
+        let game_printer = '';
+        for (i = 0; i < player_games.games.length; i++) {
+          let primary_game = (player_games.primary_game_index == i)
+              ? '(Your primary game)'
+              : '';
+          let other_player = (player_games.games[i].black_piece_user ==
+              msg.author)
+              ? player_games.games[i].white_piece_user
+              : player_games.games[i].black_piece_user;
+          game_printer += `Game ${i + 1} with ${other_player} ${primary_game}`;
+        }
+        msg.channel.send(game_printer);
+      }
+    } else if (command.includes('switch game')) {
+      let game_number = command.split('switch game').pop();
+      // check if the game is was not defined or it wasn't a number
+      if (game_number == '' || isNaN(game_number)) {
+        msg.reply(
+            'Please enter a correct game number. (e.g. !cb switch game 2 but not !cb switch game two)');
+      } else {
+        let player_info = find_player_games(msg.author);
+        if (typeof player_info.games === 'undefined' ||
+            player_info.games.length == 0) {
+          msg.reply('You have no games!');
+        } else if (typeof player_info.games[game_number - 1] === 'undefined') {
+          msg.reply(`You have no game in game slot ${game_number}`);
+        } else if (player_info.primary_game_index == game_number - 1) {
+          msg.reply(`Game ${game_number.trim()} is already your primary game.`);
+        } else {
+          player_info.primary_game_index = game_number - 1;
+          player_base[player_base.indexOf(player_info)] = player_info;
+          let new_primary_game = player_info.games[player_info.primary_game_index];
+          let opponent = (new_primary_game.black_piece_user == msg.author)
+              ? new_primary_game.white_piece_user
+              : new_primary_game.black_piece_user;
+          msg.reply(
+              `You have successfully switched your primary game to your game number ${game_number.trim()} with ${opponent.username}. Game printing please wait...`);
+          msg.channel.send(new_primary_game.print_game());
+        }
+      }
     }
   }
   if (msg.content === 'ping') {
@@ -136,14 +181,21 @@ function add_game_to_all_games(game) {
   all_games.push(game);
 }
 
+// player base functions
 function update_player_base(person, game) {
   var player_index = player_base.indexOf(person);
-  if(player_index !== -1) {
+  if (player_index !== -1) {
     player_base[player_index].games.push(game);
-    player_base[player_index].primary_game_index = player_base[player_index].games.indexOf(game);
+    player_base[player_index].primary_game_index = player_base[player_index].games.indexOf(
+        game);
   } else {
     person.games = [game];
     person.primary_game_index = 0;
     player_base.push(person);
   }
+}
+
+function find_player_games(person) {
+  let players_base_index = player_base.indexOf(person);
+  return (players_base_index !== -1) ? player_base[players_base_index] : [];
 }
