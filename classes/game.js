@@ -102,7 +102,7 @@ class Game {
 
   }
 
-  print_game() {
+  print_game(include_players_turn = false) {
     var structure = this.game_structure;
     var printer = '';
     // spaces are needed for some characters as others take up 2 char spaces
@@ -153,9 +153,10 @@ class Game {
       }
       printer += '\n';
     }
-    printer += `It is ${this._players_turn}'s turn. Type !cb move (piece coordinate) to (desired coordinate). e.g. !cb move !cb move C2 to H3.`;
+    printer += (include_players_turn) ? `It is ${this._players_turn}'s turn. Type !cb move (piece coordinate) to (desired coordinate). e.g. !cb move !cb move C2 to H3.` : '';
     return printer;
   }
-};
+}
+
 Game._player_base = [];
 module.exports = Game;

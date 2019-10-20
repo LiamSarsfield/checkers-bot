@@ -20,36 +20,17 @@ client.on('message', msg => {
   find_player_games(msg.author);
   if (msg.author.id != client.user.id && msg.content.startsWith('!cb ')) {
     let command = msg.content.replace('!cb ', '');
-    if (command == 'start') {
-      refresh_awaiting_opponent_queue();
-      add_user_to_awaiting_opponent_queue(msg);
-      msg.reply('Ok! with who do you want to start the game with?');
-    } else if (command.includes('with')) {
-      let user_mentions = msg.mentions.users;
-      // If the user was in the queue for awaiting an opponent...
-      let user_awaiting = awaiting_opponent_queue.find(
-          x => x.author.id === msg.author.id);
-      user_awaiting = (user_awaiting != null) ? user_awaiting.author : null;
-      let user_invited = user_mentions.first();
-      if (user_awaiting == null) {
-        msg.reply(
-            'You have to start the game first!. Type "!cb start" then type "!cb with *ping user*');
-      } else if (user_mentions.size != 1) {
-        msg.reply(
-            'You have either not mentioned an invited user or you have mentioned too many people!');
-      } else if (user_invited.id == client.user.id) {
-        msg.reply('I\'m honoured you want me to play but I can\'t :(');
-      } else if (user_awaiting !== null) {
-        remove_user_from_awaiting_opponent_queue(user_awaiting);
-        if (user_invited.id == user_awaiting.id) {
-          msg.reply(
-              'If you want to play checkers with yourself, enter "!cb I want to play with myself"');
-        } else {
-          msg.channel.send(user_invited + ', ' + msg.author.username +
-              ' has invited you to play checkers! Type !cb accept to play.');
-          add_user_to_awaiting_opponent_to_accept_queue(msg, user_invited);
-        }
+    if (command.startsWith('start')) {
+      if (command.includes('with')) {
+        awaiting_opponent_queue_initiator(msg, true);
+      } else {
+        refresh_awaiting_opponent_queue();
+        add_user_to_awaiting_opponent_queue(msg);
+        msg.reply('Ok! with who do you want to start the game with?');
       }
+
+    } else if (command.includes('with')) {
+      awaiting_opponent_queue_initiator(msg);
     } else if (command.includes('I want to play with myself')) {
       remove_user_from_awaiting_opponent_queue(msg.author);
       let game = initiate_new_game(msg.author, msg.author);
@@ -63,12 +44,10 @@ client.on('message', msg => {
             `Ok! You have started a game with ${invited_queue[0].invitee_message.author}, please wait...`);
         let game = initiate_new_game(invited_queue[0].invitee_message.author,
             msg.author);
-        msg.channel.send(game.print_game());
+        msg.channel.send(game.print_game(true));
       }
     } else if (command == 'move') {
-      // get the user's primary game and execute their command
-      all_games.filter(x => (x.white_piece_user.id === msg.author.id) ||
-          (x.black_piece_user_piece_user.id === msg.author.id));
+      let player_games = find_player_games(msg.author);
     } else if (command == 'my games') {
       let player_games = find_player_games(msg.author);
       if (player_games.length === 0) {
@@ -84,35 +63,40 @@ client.on('message', msg => {
               msg.author)
               ? player_games.games[i].white_piece_user
               : player_games.games[i].black_piece_user;
-          game_printer += `Game ${i + 1} with ${other_player} ${primary_game}`;
+          game_printer += `Game ${i +
+          1} with ${other_player} ${primary_game} \n`;
         }
         msg.channel.send(game_printer);
       }
-    } else if (command.includes('switch game')) {
-      let game_number = command.split('switch game').pop();
-      // check if the game is was not defined or it wasn't a number
+    } else if (command.includes('switch game') || command.includes('print game')) {
+      let game_number = command.split('switch game').pop().split("print game").pop();
+      // check if the game wasn't defined or it wasn't a number
       if (game_number == '' || isNaN(game_number)) {
-        msg.reply(
-            'Please enter a correct game number. (e.g. !cb switch game 2 but not !cb switch game two)');
+        msg.reply('Please enter a correct game number. (e.g. !cb switch game 2 but not !cb switch game two)');
       } else {
         let player_info = find_player_games(msg.author);
-        if (typeof player_info.games === 'undefined' ||
-            player_info.games.length == 0) {
+        if (typeof player_info.games === 'undefined' || player_info.games.length == 0) {
           msg.reply('You have no games!');
         } else if (typeof player_info.games[game_number - 1] === 'undefined') {
           msg.reply(`You have no game in game slot ${game_number}`);
-        } else if (player_info.primary_game_index == game_number - 1) {
+        } else if (command.includes('switch game') &&
+            player_info.primary_game_index == game_number - 1) {
           msg.reply(`Game ${game_number.trim()} is already your primary game.`);
         } else {
-          player_info.primary_game_index = game_number - 1;
-          player_base[player_base.indexOf(player_info)] = player_info;
-          let new_primary_game = player_info.games[player_info.primary_game_index];
-          let opponent = (new_primary_game.black_piece_user == msg.author)
-              ? new_primary_game.white_piece_user
-              : new_primary_game.black_piece_user;
-          msg.reply(
-              `You have successfully switched your primary game to your game number ${game_number.trim()} with ${opponent.username}. Game printing please wait...`);
-          msg.channel.send(new_primary_game.print_game());
+          // we're assuming at this point a valid game was found so we can print it no matter the outcome
+          let game_selected = player_info.games[game_number - 1];
+          let opponent = (game_selected.black_piece_user == msg.author)
+              ? game_selected.white_piece_user
+              : game_selected.black_piece_user;
+          if (command.includes('switch game')) {
+            player_info.primary_game_index = game_number - 1;
+            player_base[player_base.indexOf(player_info)] = player_info;
+            msg.reply(`You have successfully switched your primary game to your game number ${game_number.trim()} with ${opponent.username}. Game printing please wait...`);
+            msg.channel.send(game_selected.print_game());
+          } else if (command.includes('print game')) {
+            msg.reply(`Game ${game_number.trim()} with ${opponent.username} printing. Please wait...`);
+          }
+          msg.channel.send(game_selected.print_game());
         }
       }
     }
@@ -135,8 +119,7 @@ function check_invites(invited) {
 // Remove all users that wanted to start a game but didn't specify with who
 function refresh_awaiting_opponent_queue() {
   for (let i = 0; i < awaiting_opponent_queue.length; i++) {
-    let date_message_sent = new Date(
-        awaiting_opponent_queue[i].createdTimestamp);
+    let date_message_sent = new Date(awaiting_opponent_queue[i].createdTimestamp);
     // get the date 30 mins before, compare it to how long the bot is awaiting
     let expiry_date = new Date();
     expiry_date.setMinutes(expiry_date.getMinutes() - 30);
@@ -159,6 +142,40 @@ function remove_user_from_awaiting_opponent_queue(user_awaiting) {
 }
 
 // Awaiting opponent queue functions
+
+function awaiting_opponent_queue_initiator(
+    msg, bypass_awaiting_opponent_queue = false) {
+  let user_mentions = msg.mentions.users;
+  // If the user was in the queue for awaiting an opponent...
+  let user_awaiting = awaiting_opponent_queue.find(x => x.author.id === msg.author.id);
+  user_awaiting = (user_awaiting != null) ? user_awaiting.author : null;
+  let user_invited = user_mentions.first();
+  if (user_awaiting == null && bypass_awaiting_opponent_queue === false) {
+    msg.reply('You have to start the game first!. Type "!cb start" then type "!cb with *ping user*');
+  } else if (user_mentions.size != 1) {
+    msg.reply('You have either not mentioned an invited user or you have mentioned too many people!');
+  } else if (user_invited.id == client.user.id) {
+    msg.reply('I\'m honoured you want me to play but I can\'t :(');
+  } else {
+    remove_user_from_awaiting_opponent_queue(user_awaiting);
+    if (user_invited.id == msg.author.id) {
+      msg.reply(
+          'If you want to play checkers with yourself, enter "!cb I want to play with myself"');
+    } else {
+      let player_base_index = find_game(msg.author, user_invited);
+      if (player_base_index !== false) {
+        msg.reply(
+            `You already have a game with ${user_invited.username} in your game slot ${player_base_index +
+            1}`);
+      } else {
+        msg.channel.send(user_invited + ', ' + msg.author.username +
+            ' has invited you to play checkers! Type !cb accept to play.');
+        add_user_to_awaiting_opponent_to_accept_queue(msg, user_invited);
+      }
+    }
+  }
+}
+
 function add_user_to_awaiting_opponent_to_accept_queue(invitee, invited) {
   awaiting_opponent_to_accept_queue.push(
       {'invitee_message': invitee, 'invited': invited});
@@ -198,4 +215,24 @@ function update_player_base(person, game) {
 function find_player_games(person) {
   let players_base_index = player_base.indexOf(person);
   return (players_base_index !== -1) ? player_base[players_base_index] : [];
+}
+
+// returns index of the game in person a's player base if a game with person a and person b exists
+function find_game(person_a, person_b) {
+  let players_game = find_player_games(person_a);
+  if (typeof players_game.games === 'undefined' || players_game.games.length ===
+      0) {
+    return false;
+  } else {
+    let index = players_game.games.findIndex(
+        x => (x.white_piece_user === person_a && x.black_piece_user ===
+            person_b)
+            || (x.white_piece_user === person_b && x.black_piece_user ===
+                person_a));
+    if (index === -1) {
+      return false;
+    } else {
+      return index;
+    }
+  }
 }

@@ -42,6 +42,6 @@ class Square {
             this._piece_white = false;
         }
     }
-};
+}
 
 module.exports = Square;
