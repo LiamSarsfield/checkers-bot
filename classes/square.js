@@ -1,47 +1,85 @@
 class Square {
-    get black_square() {
-        return this._black_square;
+  constructor(is_white_square, piece) {
+    if (is_white_square) {
+      this._white_square = true;
+      this._black_square = false;
+      this._piece = piece;
+    } else {
+      this._white_square = false;
+      this._black_square = true;
     }
 
-    get white_square() {
-        return this._white_square;
-    }
-    get has_piece() {
-        return this._has_piece;
-    }
-    get piece_white() {
-        return this._piece_white;
-    }
-    get piece_black() {
-        return this._piece_black;
-    }
-    constructor(is_white_square, has_piece, is_white_piece_type) {
-        if (is_white_square) {
-            this._white_square = true;
-            this._black_square = false;
-            this._has_piece = (has_piece === true);
-            // There's a piece on the square, must be either black or white
-            if (has_piece === true) {
-                if (is_white_piece_type === true) {
-                    this._piece_white = true;
-                    this._piece_black = false;
-                } else {
-                    this._piece_white = false;
-                    this._piece_black = true;
-                }
-            } else {
-                this._has_piece = false;
-                this._piece_white = false;
-            }
+  }
 
-        } else {
-            // Only white squares can have a black/white piece
-            this._white_square = false;
-            this._black_square = true;
-            this._has_piece = false;
-            this._piece_white = false;
-        }
+  get x_coord() {
+    return this._x_coord;
+  }
+
+  set x_coord(value) {
+    this._x_coord = value;
+    if (this.has_piece) {
+      this._piece.x_coord = value;
     }
+  }
+
+  get y_coord() {
+    return this._y_coord;
+  }
+
+  set y_coord(value) {
+    this._y_coord = value;
+    if (this.has_piece) {
+      this._piece.y_coord = value;
+    }
+  }
+
+  get black_square() {
+    return this._black_square;
+  }
+
+  get white_square() {
+    return this._white_square;
+  }
+
+  get has_piece() {
+    return (typeof this._piece !== 'undefined');
+  }
+
+  get piece() {
+    return this._piece;
+  }
+
+  set piece(piece) {
+    this._piece = piece;
+  }
+
+  get piece_white() {
+    if (typeof this._piece == 'undefined' || this._piece.constructor.name != 'Piece') {
+      return false;
+    } else {
+      return this._piece.is_white;
+    }
+  }
+
+  get piece_black() {
+    if (typeof this._piece == 'undefined' || this._piece.constructor.name != 'Piece') {
+      return false;
+    } else {
+      return this._piece.is_black;
+    }
+  }
+
+  remove_piece() {
+    let return_piece = this.piece;
+    this.piece = undefined;
+    return return_piece;
+  }
+
+  assign_piece(piece) {
+      piece.x_coord = this.x_coord;
+      piece.y_coord = this.y_coord;
+      this.piece = piece;
+  }
 }
 
 module.exports = Square;

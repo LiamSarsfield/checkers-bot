@@ -17,7 +17,6 @@ client.on('ready', () => {
 });
 
 client.on('message', msg => {
-  find_player_games(msg.author);
   if (msg.author.id != client.user.id && msg.content.startsWith('!cb ')) {
     let command = msg.content.replace('!cb ', '');
     if (command.startsWith('start')) {
@@ -46,8 +45,48 @@ client.on('message', msg => {
             msg.author);
         msg.channel.send(game.print_game(true));
       }
-    } else if (command == 'move') {
+    } else if (command.startsWith('move')) {
       let player_games = find_player_games(msg.author);
+      // first check if you have a primary game. You can currently only move your primary game
+      if (typeof player_games.primary_game_index === 'undefined') {
+        msg.reply(`You don't have any games!`);
+      } else {
+        let primary_game = player_games.games[player_games.primary_game_index];
+        // check if it is the player's turn
+        if (primary_game.players_turn.id !== msg.author.id) {
+          msg.reply(`It is not your turn, it is ${primary_game.players_turn.username}'s turn`);
+        } else {
+          // get the coordinates through a regex
+          let coordinates = command.match(/[a-z]{1}[1-9]{1}(\s|$)/gi);
+          if (coordinates.length !== 2) {
+            msg.reply('Please enter 2 valid coordinates for your move.');
+          } else {
+            let old_coordinates = coordinates[0].split('');
+            let new_coordinates = coordinates[1].split('');
+            let move_response = primary_game.move(old_coordinates[0], old_coordinates[1], new_coordinates[0],
+                new_coordinates[1], msg.author);
+            if (move_response === true) {
+              let opponent = (primary_game.black_piece_user.id == msg.author.id)
+                  ? primary_game.white_piece_user : primary_game.black_piece_user;
+              primary_game.players_turn = opponent;
+
+              // if someone took out a piece, remove the piece from the board.
+              let extra_message_info = ``;
+              let square_in_between = primary_game.get_square_in_between(primary_game.get_square(old_coordinates[0],
+                  old_coordinates[1]), primary_game.get_square(new_coordinates[0], new_coordinates[1]));
+              if (typeof square_in_between !== 'undefined') {
+                extra_message_info += `You have removed a ${square_in_between.piece.is_white() ? 'white' : 'black'} piece from the board.`;
+                square_in_between.piece = undefined;
+              }
+              let square_possibilities = primary_game.double_jump_check(primary_game.get_square(new_coordinates[0], new_coordinates[1]), msg.author);
+              msg.reply(`Move successful. ${extra_message_info} It is now ${opponent}'s turn. Printing board now...`);
+              msg.channel.send(primary_game.print_game());
+            } else {
+              msg.reply(`Your move is invalid! Reason stated: ${move_response}`);
+            }
+          }
+        }
+      }
     } else if (command == 'my games') {
       let player_games = find_player_games(msg.author);
       if (player_games.length === 0) {
@@ -59,8 +98,7 @@ client.on('message', msg => {
           let primary_game = (player_games.primary_game_index == i)
               ? '(Your primary game)'
               : '';
-          let other_player = (player_games.games[i].black_piece_user ==
-              msg.author)
+          let other_player = (player_games.games[i].black_piece_user == msg.author)
               ? player_games.games[i].white_piece_user
               : player_games.games[i].black_piece_user;
           game_printer += `Game ${i +
@@ -69,7 +107,7 @@ client.on('message', msg => {
         msg.channel.send(game_printer);
       }
     } else if (command.includes('switch game') || command.includes('print game')) {
-      let game_number = command.split('switch game').pop().split("print game").pop();
+      let game_number = command.split('switch game').pop().split('print game').pop();
       // check if the game wasn't defined or it wasn't a number
       if (game_number == '' || isNaN(game_number)) {
         msg.reply('Please enter a correct game number. (e.g. !cb switch game 2 but not !cb switch game two)');
@@ -91,7 +129,8 @@ client.on('message', msg => {
           if (command.includes('switch game')) {
             player_info.primary_game_index = game_number - 1;
             player_base[player_base.indexOf(player_info)] = player_info;
-            msg.reply(`You have successfully switched your primary game to your game number ${game_number.trim()} with ${opponent.username}. Game printing please wait...`);
+            msg.reply(
+                `You have successfully switched your primary game to your game number ${game_number.trim()} with ${opponent.username}. Game printing please wait...`);
             msg.channel.send(game_selected.print_game());
           } else if (command.includes('print game')) {
             msg.reply(`Game ${game_number.trim()} with ${opponent.username} printing. Please wait...`);
