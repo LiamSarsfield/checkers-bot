@@ -2,6 +2,7 @@ const Discord = require('discord.js');
 const client = new Discord.Client();
 const {token} = require('./config.json');
 const Game = require('./classes/game.js');
+const Piece = require('./classes/piece.js');
 
 // This array contains all users that the bot is waiting confirmation on, who is going to be their opponent
 let awaiting_opponent_queue = [];
@@ -21,28 +22,53 @@ client.on('message', msg => {
     let command = msg.content.replace('!cb ', '');
     if (command.startsWith('start')) {
       if (command.includes('with')) {
-        awaiting_opponent_queue_initiator(msg, true);
+        if (command.startsWith('start game with myself')) {
+          msg.reply(`Ok! A game starting, please wait...`);
+          let game = initiate_new_game(msg.author, msg.author, command.includes('debug'));
+          msg.channel.send(game.print_game());
+        } else {
+          awaiting_opponent_queue_initiator(msg, true);
+        }
       } else {
         refresh_awaiting_opponent_queue();
         add_user_to_awaiting_opponent_queue(msg);
         msg.reply('Ok! with who do you want to start the game with?');
       }
-
+    } else if (command.startsWith('debug')) {
+      let player_games = find_player_games(msg.author);
+      if (typeof player_games.primary_game_index === 'undefined') {
+        msg.reply(`You don't have any games!`);
+      } else {
+        let primary_game = player_games.games[player_games.primary_game_index];
+        if (primary_game.debugging_game === false) {
+          msg.reply('You cannot debug a game that is not for that purposes.');
+        } else {
+          let coordinates = command.match(/[a-z]{1}[1-9]{1}(\s|$)/gi);
+          if (coordinates === null || coordinates.length !== 1) {
+            msg.reply('Please enter a valid coordinate.');
+          } else {
+            let coordinate = coordinates[0].split('');
+            let square = primary_game.get_square(coordinate[0], coordinate[1]);
+            if (command.includes('empty')) {
+              square.piece = undefined;
+              msg.reply(`That square is now empty`);
+            } else {
+              let is_white = (command.includes('white'));
+              square.piece = new Piece(is_white, square.x_coord, square.y_coord);
+              msg.reply(`Your ${square.piece.team()} piece is now on ${square.friendly_coord}`);
+              msg.channel.send(primary_game.print_game(false));
+            }
+          }
+        }
+      }
     } else if (command.includes('with')) {
       awaiting_opponent_queue_initiator(msg);
-    } else if (command.includes('I want to play with myself')) {
-      remove_user_from_awaiting_opponent_queue(msg.author);
-      let game = initiate_new_game(msg.author, msg.author);
-      msg.reply('Ok! A game starting, please wait...');
-      msg.reply(game.print_game());
     } else if (command == 'accept') {
       let invited_queue = check_invites(msg.author);
       // If the user has only one person that invited them...
       if (invited_queue.length === 1) {
-        msg.reply(
-            `Ok! You have started a game with ${invited_queue[0].invitee_message.author}, please wait...`);
-        let game = initiate_new_game(invited_queue[0].invitee_message.author,
-            msg.author);
+        msg.reply(`Ok! You have started a game with ${invited_queue[0].invitee_message.author}, please wait...`);
+        let game = initiate_new_game(invited_queue[0].invitee_message.author, msg.author);
         msg.channel.send(game.print_game(true));
       }
     } else if (command.startsWith('move')) {
@@ -53,33 +79,52 @@ client.on('message', msg => {
       } else {
         let primary_game = player_games.games[player_games.primary_game_index];
         // check if it is the player's turn
-        if (primary_game.players_turn.id !== msg.author.id) {
-          msg.reply(`It is not your turn, it is ${primary_game.players_turn.username}'s turn`);
+        if (primary_game.active_team.id !== msg.author.id) {
+          msg.reply(`It is not your turn, it is ${primary_game.active_team.username}'s turn`);
         } else {
           // get the coordinates through a regex
           let coordinates = command.match(/[a-z]{1}[1-9]{1}(\s|$)/gi);
-          if (coordinates.length !== 2) {
+          if (coordinates === null || coordinates.length !== 2) {
             msg.reply('Please enter 2 valid coordinates for your move.');
           } else {
             let old_coordinates = coordinates[0].split('');
             let new_coordinates = coordinates[1].split('');
-            let move_response = primary_game.move(old_coordinates[0], old_coordinates[1], new_coordinates[0],
-                new_coordinates[1], msg.author);
+            let old_square = primary_game.get_square(old_coordinates[0], old_coordinates[1]);
+            let new_square = primary_game.get_square(new_coordinates[0], new_coordinates[1]);
+            let move_response = primary_game.move(old_square, new_square, msg.author);
             if (move_response === true) {
-              let opponent = (primary_game.black_piece_user.id == msg.author.id)
-                  ? primary_game.white_piece_user : primary_game.black_piece_user;
-              primary_game.players_turn = opponent;
-
-              // if someone took out a piece, remove the piece from the board.
+              let piece = new_square.piece;
+              // move is valid
+              let opponent = primary_game.inactive_team;
+              // if someone took out a piece, remove the piece from the board and check for a double jump opportunity.
               let extra_message_info = ``;
               let square_in_between = primary_game.get_square_in_between(primary_game.get_square(old_coordinates[0],
                   old_coordinates[1]), primary_game.get_square(new_coordinates[0], new_coordinates[1]));
+              let switch_turn = true;
               if (typeof square_in_between !== 'undefined') {
-                extra_message_info += `You have removed a ${square_in_between.piece.is_white() ? 'white' : 'black'} piece from the board.`;
+                // this recursive function does the work if a double jump is a possibility, we just need to portray
+                // what happened on the board through what was returned
+                let square_possibilities = primary_game.double_jump_initiator(
+                    primary_game.get_square(new_coordinates[0], new_coordinates[1]), msg.author);
+                if (Array.isArray(square_possibilities)) {
+                  extra_message_info += `You have the option to jump a piece your piece on ${square_possibilities[2].friendly_coord}` +
+                      ` to either ${square_possibilities[0].friendly_coord} or ${square_possibilities[1].friendly_coord}. \nPlease select one of these pieces to jump.`;
+                  switch_turn = false;
+                } else if (square_possibilities !== primary_game.get_square(new_coordinates[0], new_coordinates[1])) {
+                  extra_message_info += `You have double jumped multiple ${square_possibilities.piece.team()} pieces!`;
+                } else {
+                  extra_message_info += `You have jumped a ${square_in_between.piece.team()} piece!`;
+                }
                 square_in_between.piece = undefined;
               }
-              let square_possibilities = primary_game.double_jump_check(primary_game.get_square(new_coordinates[0], new_coordinates[1]), msg.author);
-              msg.reply(`Move successful. ${extra_message_info} It is now ${opponent}'s turn. Printing board now...`);
+              if(switch_turn) {
+                primary_game.inactive_team = primary_game.active_team;
+                primary_game.active_team = opponent;
+              }
+              if (!piece.is_king && primary_game.check_king_crowning(piece)) {
+                extra_message_info += `Your piece is crowned king on ${new_square.friendly_coord}!`;
+              }
+              msg.reply(`Move successful. ${extra_message_info} It is ${opponent}'s turn. Printing board now...`);
               msg.channel.send(primary_game.print_game());
             } else {
               msg.reply(`Your move is invalid! Reason stated: ${move_response}`);
@@ -129,8 +174,7 @@ client.on('message', msg => {
           if (command.includes('switch game')) {
             player_info.primary_game_index = game_number - 1;
             player_base[player_base.indexOf(player_info)] = player_info;
-            msg.reply(
-                `You have successfully switched your primary game to your game number ${game_number.trim()} with ${opponent.username}. Game printing please wait...`);
+            msg.reply(`You have successfully switched your primary game to your game number ${game_number.trim()} with ${opponent.username}. Game printing please wait...`);
             msg.channel.send(game_selected.print_game());
           } else if (command.includes('print game')) {
             msg.reply(`Game ${game_number.trim()} with ${opponent.username} printing. Please wait...`);
@@ -182,8 +226,7 @@ function remove_user_from_awaiting_opponent_queue(user_awaiting) {
 
 // Awaiting opponent queue functions
 
-function awaiting_opponent_queue_initiator(
-    msg, bypass_awaiting_opponent_queue = false) {
+function awaiting_opponent_queue_initiator(msg, bypass_awaiting_opponent_queue = false) {
   let user_mentions = msg.mentions.users;
   // If the user was in the queue for awaiting an opponent...
   let user_awaiting = awaiting_opponent_queue.find(x => x.author.id === msg.author.id);
@@ -198,17 +241,14 @@ function awaiting_opponent_queue_initiator(
   } else {
     remove_user_from_awaiting_opponent_queue(user_awaiting);
     if (user_invited.id == msg.author.id) {
-      msg.reply(
-          'If you want to play checkers with yourself, enter "!cb I want to play with myself"');
+      msg.reply('If you want to play checkers with yourself, enter "!cb start game with myself"');
     } else {
       let player_base_index = find_game(msg.author, user_invited);
       if (player_base_index !== false) {
-        msg.reply(
-            `You already have a game with ${user_invited.username} in your game slot ${player_base_index +
-            1}`);
+        msg.reply(`You already have a game with ${user_invited.username} in your game slot ${player_base_index + 1}`);
       } else {
-        msg.channel.send(user_invited + ', ' + msg.author.username +
-            ' has invited you to play checkers! Type !cb accept to play.');
+        msg.channel.send(user_invited + ', ' + msg.author.username + ' has invited you to play checkers! Type !cb' +
+            ' accept to play.');
         add_user_to_awaiting_opponent_to_accept_queue(msg, user_invited);
       }
     }
@@ -225,8 +265,8 @@ function remove_user_to_awaiting_opponent_to_accept_queue(invitee, invited) {
       {'invitee': invitee, 'invited': invited});
 }
 
-function initiate_new_game(person_a, person_b) {
-  let game = new Game(person_a, person_b);
+function initiate_new_game(person_a, person_b, is_debugging_game = false) {
+  let game = new Game(person_a, person_b, is_debugging_game);
   add_game_to_all_games(game);
   update_player_base(person_a, game);
   update_player_base(person_b, game);

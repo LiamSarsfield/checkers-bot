@@ -33,6 +33,14 @@ class Square {
     }
   }
 
+  get friendly_coord() {
+    return this._friendly_coord;
+  }
+
+  set friendly_coord(value) {
+    this._friendly_coord = value;
+  }
+
   get black_square() {
     return this._black_square;
   }
