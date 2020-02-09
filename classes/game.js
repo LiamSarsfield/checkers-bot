@@ -312,13 +312,13 @@ class Game {
 
     function check_valid_y_coordinates() {
       let piece_to_move = old_square.piece;
-      let y_coord_delta = (piece_to_move.team === 'black') ? old_square.y_coord + 1 : old_square.y_coord - 1;
-      let y_coord_delta_2 = (piece_to_move === 'black') ? old_square.y_coord + 2 : old_square.y_coord - 2;
+      let y_coord_delta = (piece_to_move.team === 'black' || piece_to_move.is_king) ? old_square.y_coord + 1 : old_square.y_coord - 1;
+      let y_coord_delta_2 = (piece_to_move.team === 'black' || piece_to_move.is_king) ? old_square.y_coord + 2 : old_square.y_coord - 2;
       if (new_square.y_coord === y_coord_delta ||
           typeof square_in_between !== 'undefined' && new_square.y_coord == y_coord_delta_2) {
         return true;
-      } else if (piece_to_move.is_king && new_square.y_coord === old_square.y_coord + 1 ||
-          typeof square_in_between !== 'undefined' && new_square.y_coord === old_square.y_coord + 2) {
+      } else if (piece_to_move.is_king && old_square.y_coord - 1 === new_square.y_coord ||
+          typeof square_in_between !== 'undefined' && old_square.y_coord - 2 === new_square.y_coord) {
         return true;
       } else {
         return false;
