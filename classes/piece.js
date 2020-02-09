@@ -1,10 +1,11 @@
 class Piece {
-  constructor(is_white, x_coord, y_coord) {
+  constructor(team, x_coord, y_coord) {
     this._is_king = false;
-    this._is_white = is_white;
-    this._is_black = !is_white;
+    this._team = (team === 'black') ? 'black' : 'white';
     this._x_coord = x_coord;
     this._y_coord = y_coord;
+    this._taken = false;
+    this._team = team;
   }
 
   get x_coord() {
@@ -55,12 +56,20 @@ class Piece {
     this._is_black = value;
   }
 
-  team() {
-    if (this.is_white === true) {
-      return 'white';
-    } else {
-      return 'black';
-    }
+  get team() {
+    return this._team;
+  }
+
+  set team(value) {
+    this._team = value;
+  }
+
+  get taken() {
+    return this._taken;
+  }
+
+  set taken(value) {
+    this._taken = value;
   }
 }
 

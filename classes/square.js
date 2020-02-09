@@ -62,31 +62,34 @@ class Square {
   }
 
   get piece_white() {
-    if (typeof this._piece == 'undefined' || this._piece.constructor.name != 'Piece') {
+    if (typeof this._piece == 'undefined' || this.piece.constructor.name != 'Piece') {
       return false;
     } else {
-      return this._piece.is_white;
+      return this.piece.team === 'white';
     }
   }
 
   get piece_black() {
-    if (typeof this._piece == 'undefined' || this._piece.constructor.name != 'Piece') {
+    if (typeof this._piece == 'undefined' || this.piece.constructor.name != 'Piece') {
       return false;
     } else {
-      return this._piece.is_black;
+      return this.piece.team === 'black';
     }
   }
 
-  remove_piece() {
+  remove_piece(piece_taken) {
     let return_piece = this.piece;
+    if(piece_taken) {
+      return_piece.taken = true;
+    }
     this.piece = undefined;
     return return_piece;
   }
 
   assign_piece(piece) {
-      piece.x_coord = this.x_coord;
-      piece.y_coord = this.y_coord;
-      this.piece = piece;
+    piece.x_coord = this.x_coord;
+    piece.y_coord = this.y_coord;
+    this.piece = piece;
   }
 }
 
