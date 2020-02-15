@@ -90,7 +90,7 @@ client.on('message', msg => {
       } else {
         msg.reply('You have games with the following people:');
         let game_printer = '';
-        for (i = 0; i < player_games.games.length; i++) {
+        for (let i = 0; i < player_games.games.length; i++) {
           let primary_game = (player_games.primary_game_index == i) ? '(Your primary game)' : '';
           let other_player = player_games.games[i].inactive_team_user;
           game_printer += `Game ${i + 1} with ${other_player} ${primary_game} \n`;

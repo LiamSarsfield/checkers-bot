@@ -232,7 +232,7 @@ class Game {
     let switch_turn = true;
     if (typeof square_in_between !== 'undefined') {
       // this recursive function does the work if a double jump is a possibility
-      let square_possibilities = this._piece_jump_processor(new_square, this.active_team_user);
+      let square_possibilities = this._piece_jump_processor(old_square, new_square, piece, this.active_team_user);
       if (Array.isArray(square_possibilities)) {
         extra_message_info += `You have the option to jump your piece on ${square_possibilities[2].friendly_coord}` +
             ` to either ${square_possibilities[0].friendly_coord} or ${square_possibilities[1].friendly_coord}. \nPlease select one of these pieces to jump.`;
@@ -312,8 +312,12 @@ class Game {
 
     function check_valid_y_coordinates() {
       let piece_to_move = old_square.piece;
-      let y_coord_delta = (piece_to_move.team === 'black' || piece_to_move.is_king) ? old_square.y_coord + 1 : old_square.y_coord - 1;
-      let y_coord_delta_2 = (piece_to_move.team === 'black' || piece_to_move.is_king) ? old_square.y_coord + 2 : old_square.y_coord - 2;
+      let y_coord_delta = (piece_to_move.team === 'black' || piece_to_move.is_king)
+          ? old_square.y_coord + 1
+          : old_square.y_coord - 1;
+      let y_coord_delta_2 = (piece_to_move.team === 'black' || piece_to_move.is_king)
+          ? old_square.y_coord + 2
+          : old_square.y_coord - 2;
       if (new_square.y_coord === y_coord_delta ||
           typeof square_in_between !== 'undefined' && new_square.y_coord == y_coord_delta_2) {
         return true;
@@ -329,35 +333,38 @@ class Game {
   // returns the best square that be found from the possibilities on the board.
   // it can also return an array of possibilities if there are 2 squares of equal jump value
   // If there are is only one jump move, the player's piece is moved to that spot automatically
-  _piece_jump_processor(square, player) {
-    // if (false && typeof square.piece == 'undefined')
-    //   return square;
-    let y_differentiator = (square.piece.team === 'black') ? 2 : -2;
-    let square_possibility_one = this.get_square(square.y_coord + y_differentiator, square.x_coord - 2);
-    let square_possibility_two = this.get_square(square.y_coord + y_differentiator, square.x_coord + 2);
+  _piece_jump_processor(old_square, new_square, piece, player) {
+    let trajectory = (new_square.y_coord - old_square.y_coord);
+    let square_possibilites = [
+      this.get_square(new_square.y_coord + trajectory, new_square.x_coord - 2),
+      this.get_square(new_square.y_coord + trajectory, new_square.x_coord + 2)];
+    let square_possibility_one = this.get_square(new_square.y_coord + trajectory, new_square.x_coord - 2);
+    let square_possibility_two = this.get_square(new_square.y_coord + trajectory, new_square.x_coord + 2);
+    if (piece.is_king) {
+      square_possibilites.push(this.get_square(new_square.y_coord + (trajectory * -1), new_square.x_coord - 2));
+      square_possibilites.push(this.get_square(new_square.y_coord + (trajectory * -1), new_square.x_coord + 2));
+    }
     let possibilities = [];
-    if (square_possibility_one !== false &&
-        this.check_valid_square_move(square, square_possibility_one, player) === true) {
-      possibilities.push(square_possibility_one);
+    for (let i = 0; i < square_possibilites.length; i++) {
+      if (square_possibilites[i] !== false && square_possibilites[i].friendly_coord !== old_square.friendly_coord &&
+          this.check_valid_square_move(new_square, square_possibilites[i], player) === true) {
+        possibilities.push(square_possibilites[i]);
+      }
     }
-    if (square_possibility_two !== false &&
-        this.check_valid_square_move(square, square_possibility_two, player) === true) {
-      possibilities.push(square_possibility_two);
-    }
+
     if (possibilities.length >= 2) {
-      this.restricted_square = square;
+      this.restricted_square = new_square;
       // third element in array will be the square the piece is on
-      possibilities.push(square);
+      possibilities.push(new_square);
       return possibilities;
     } else if (possibilities.length === 1) {
-      let piece = square.piece;
-      square.piece = undefined;
-      possibilities[0].piece = piece;
-      let get_square_in_between = this.get_square_in_between(square, possibilities[0]);
-      get_square_in_between.piece = undefined;
-      return this._piece_jump_processor(possibilities[0], player);
+      let piece = new_square.remove_piece(false);
+      possibilities[0].assign_piece(piece);
+      let get_square_in_between = this.get_square_in_between(new_square, possibilities[0]);
+      get_square_in_between.remove_piece(true);
+      return this._piece_jump_processor(new_square, possibilities[0], piece, player);
     } else {
-      return square;
+      return new_square;
     }
   }
 
